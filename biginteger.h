@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <compare>
 #include <iostream>
 #include <string>
@@ -15,19 +16,67 @@ enum signs {
     pos = 1
 };
 
+int reversebits(int x, int pw2) {
+    int res = 0;
+    for (int i = 0; i < pw2; i++) {
+        if ((x >> i) & 1)
+            res |= (1 << (pw2 - i - 1));
+    }
+    return res;
+}
+
 const int MOD = 10;
+
+class Complex {
+   public:
+    long double r;
+    long double i;
+
+    Complex() : r(0), i(0) {}
+
+    Complex(long double x) : r(x), i(0) {}
+
+    Complex(long double r, long double i) : r(r), i(i) {}
+
+    Complex(const Complex &tocopy) : r(tocopy.r), i(tocopy.i) {}
+
+    Complex operator+(const Complex &second) const {
+        return Complex(r + second.r, i + second.i);
+    }
+
+    Complex operator-(const Complex &second) const {
+        return Complex(r - second.r, i - second.i);
+    }
+
+    Complex operator*(const Complex &second) const {
+        return Complex(r * second.r - i * second.i, i * second.r + r * second.i);
+    }
+
+    Complex &operator*=(const Complex &second) {
+        long double temp = r;
+        r = r * second.r - i * second.i;
+        i = i * second.r + temp * second.i;
+        return *this;
+    }
+
+    Complex &operator=(const Complex &second) {
+        r = second.r;
+        i = second.i;
+        return *this;
+    }
+};
+
 class BigInteger {
    private:
     vector<int> data;
     signs sign;
 
     int get(size_t id) const {
-        if (id < data.size())
-            return data[id];
+        if (id < data.size()) return data[id];
         return 0;
     }
 
-    void upgrade(int x, int& zeros) {
+    void upgrade(int x, int &zeros) {
         if (x) {
             for (int j = 0; j < zeros; j++) {
                 data.push_back(0);
@@ -40,8 +89,7 @@ class BigInteger {
 
     BigInteger abs() const {
         BigInteger res = BigInteger(*this);
-        if (res.sign == signs::neg)
-            res.sign = signs::pos;
+        if (res.sign == signs::neg) res.sign = signs::pos;
         return res;
     }
 
@@ -51,11 +99,9 @@ class BigInteger {
             data[i] += delta;
             delta = data[i] / MOD;
             data[i] = data[i] % MOD;
-            if (delta == 0)
-                break;
+            if (delta == 0) break;
         }
-        if (delta != 0)
-            data.push_back(delta);
+        if (delta != 0) data.push_back(delta);
     }
 
     void sub1() {
@@ -68,16 +114,14 @@ class BigInteger {
             } else
                 break;
         }
-        while (data.size() && data[data.size() - 1] == 0)
-            data.pop_back();
+        while (data.size() && data[data.size() - 1] == 0) data.pop_back();
         data.shrink_to_fit();
     }
 
-    BigInteger add(const BigInteger& second, signs sign1 = signs::pos) const {
+    BigInteger add(const BigInteger &second, signs sign1 = signs::pos) const {
         if (second.sign == signs::zero || sign1 == signs::zero)
             return BigInteger(*this);
-        if (sign == signs::zero)
-            return BigInteger(second);
+        if (sign == signs::zero) return BigInteger(second);
         BigInteger res = BigInteger();
         int size = std::max(data.size(), second.data.size()) + 1;
         res.data.reserve(size);
@@ -120,7 +164,83 @@ class BigInteger {
         return res;
     }
 
-    BigInteger mul(const BigInteger& second) const {
+    void FFT(Complex *a, int n, Complex q) const {
+        int pw2 = 0;
+        while ((1 << pw2) < n)
+            pw2++;
+        for (int i = 0; i < n; i++) {
+            int rev = reversebits(i, pw2);
+            if (i < rev)
+                std::swap(a[i], a[rev]);
+        }
+        for (int l = 2; l <= n; l *= 2) {
+            Complex cur = q;
+            for (int ll = n; ll > l; ll /= 2)
+                cur *= cur;
+            for (int start = 0; start < n; start += l) {
+                int mid = start + l / 2;
+                Complex qdeg = 1;
+                int pos = start;
+                while (pos < mid) {
+                    Complex u = Complex(a[pos]);
+                    Complex v = Complex(a[pos + l / 2]) * qdeg;
+                    a[pos] = u + v;
+                    a[pos + l / 2] = u - v;
+                    qdeg *= cur;
+                    pos++;
+                }
+            }
+        }
+    }
+
+    BigInteger mul(const BigInteger &second) const {
+        if (sign == signs::zero || second.sign == signs::zero)
+            return 0;
+        int n = 1;
+        while (static_cast<size_t>(n) < data.size() || static_cast<size_t>(n) < second.data.size())
+            n *= 2;
+        n *= 2;
+        Complex *a = new Complex[n]();
+        Complex *b = new Complex[n]();
+        for (size_t i = 0; i < data.size(); i++)
+            a[i] = data[i];
+        for (size_t i = 0; i < second.data.size(); i++)
+            b[i] = second.data[i];
+        long double phi = 2 * acos(-1) / static_cast<long double>(n);
+
+        FFT(a, n, Complex(cos(phi), sin(phi)));
+        FFT(b, n, Complex(cos(phi), sin(phi)));
+        for (int i = 0; i < n; i++)
+            std::cout << "(" << a[i].r << ", " << a[i].i << ") ";
+        std::cout << std::endl;
+        for (int i = 0; i < n; i++)
+            a[i] *= b[i];
+        FFT(a, n, Complex(cos(-phi), sin(-phi)));
+        // std::cout << "aboba" << std::endl;
+        BigInteger res;
+        long long delta = 0;
+        int pos = 0;
+        int cntzero = 0;
+        while (pos < n || delta) {
+            // std::cout << delta << std::endl;
+            delta += round(a[pos].r / n);
+            if (delta % MOD) {
+                for (int i = 0; i < cntzero; i++)
+                    res.data.push_back(0);
+                cntzero = 0;
+                res.data.push_back(delta % MOD);
+            } else
+                cntzero++;
+            delta /= MOD;
+            pos++;
+        }
+        if ((sign == signs::neg && second.sign == signs::neg) || (sign == signs::pos && second.sign == signs::pos))
+            res.sign = signs::pos;
+        else
+            res.sign = signs::neg;
+        delete[] a;
+        delete[] b;
+        return res;
     }
 
    public:
@@ -140,31 +260,19 @@ class BigInteger {
         }
     }
 
-    BigInteger(unsigned long long n) {
-        if (n == 0) {
-            sign = signs::zero;
-        } else
-            sign = signs::pos;
-        while (n > 0) {
-            data.push_back(n % MOD);
-            n /= MOD;
-        }
-    }
-
-    BigInteger(const BigInteger& base) {
+    BigInteger(const BigInteger &base) {
         data = base.data;
         sign = base.sign;
     }
 
-    std::strong_ordering operator<=>(const BigInteger& second) const {
+    std::strong_ordering operator<=>(const BigInteger &second) const {
         if (sign == signs::pos && second.sign != signs::pos)
             return std::strong_ordering::greater;
         if (sign == signs::neg && second.sign != signs::neg)
             return std::strong_ordering::less;
-        if (sign == signs::zero)
-            return 0 <=> static_cast<int>(second.sign);
-        const BigInteger& swapped1 = (sign == signs::pos) ? *this : second;
-        const BigInteger& swapped2 = (sign == signs::pos) ? second : *this;
+        if (sign == signs::zero) return 0 <=> static_cast<int>(second.sign);
+        const BigInteger &swapped1 = (sign == signs::pos) ? *this : second;
+        const BigInteger &swapped2 = (sign == signs::pos) ? second : *this;
         if (swapped1.data.size() != swapped2.data.size())
             return swapped1.data.size() <=> swapped2.data.size();
         for (int i = data.size() - 1; i >= 0; --i) {
@@ -174,7 +282,7 @@ class BigInteger {
         return std::strong_ordering::equal;
     }
 
-    BigInteger& operator++() {
+    BigInteger &operator++() {
         if (sign == signs::zero) {
             sign = signs::pos;
             data.push_back(1);
@@ -182,13 +290,12 @@ class BigInteger {
             add1();
         } else {
             sub1();
-            if (data.size() == 0)
-                sign = signs::zero;
+            if (data.size() == 0) sign = signs::zero;
         }
         return *this;
     }
 
-    BigInteger& operator--() {
+    BigInteger &operator--() {
         if (sign == signs::zero) {
             sign = signs::neg;
             data.push_back(1);
@@ -196,8 +303,7 @@ class BigInteger {
             add1();
         } else {
             sub1();
-            if (data.size() == 0)
-                sign = signs::zero;
+            if (data.size() == 0) sign = signs::zero;
         }
         return *this;
     }
@@ -225,40 +331,43 @@ class BigInteger {
 
     string toString() const {
         string s = "";
-        if (sign == signs::neg)
-            s += '-';
+        if (sign == signs::neg) s += '-';
         for (int i = data.size() - 1; i >= 0; i--) {
             s += '0' + data[i];
         }
-        if (sign == signs::zero)
-            s = "0";
+        if (sign == signs::zero) s = "0";
         return s;
     }
 
-    explicit operator bool() const {
-        return sign != signs::zero;
-    }
+    explicit operator bool() const { return sign != signs::zero; }
 
-    friend BigInteger operator+(const BigInteger& first, const BigInteger& second);
-    friend BigInteger operator-(const BigInteger& first, const BigInteger& second);
-    friend std::ostream& operator<<(std::ostream& output, const BigInteger& val);
-    friend std::istream& operator>>(std::istream& input, BigInteger& val);
+    friend BigInteger operator+(const BigInteger &first,
+                                const BigInteger &second);
+    friend BigInteger operator-(const BigInteger &first,
+                                const BigInteger &second);
+    friend std::ostream &operator<<(std::ostream &output, const BigInteger &val);
+    friend std::istream &operator>>(std::istream &input, BigInteger &val);
+    friend BigInteger operator*(const BigInteger &first, const BigInteger &second);
 };
 
-BigInteger operator+(const BigInteger& first, const BigInteger& second) {
+BigInteger operator+(const BigInteger &first, const BigInteger &second) {
     return first.add(second);
 }
 
-BigInteger operator-(const BigInteger& first, const BigInteger& second) {
+BigInteger operator*(const BigInteger &first, const BigInteger &second) {
+    return first.mul(second);
+}
+
+BigInteger operator-(const BigInteger &first, const BigInteger &second) {
     return first.add(second, signs::neg);
 }
 
-std::ostream& operator<<(std::ostream& output, const BigInteger& val) {
+std::ostream &operator<<(std::ostream &output, const BigInteger &val) {
     output << val.toString();
     return output;
 }
 
-std::istream& operator>>(std::istream& input, BigInteger& val) {
+std::istream &operator>>(std::istream &input, BigInteger &val) {
     val.data.clear();
     val.sign = signs::pos;
     char c;
@@ -274,16 +383,14 @@ std::istream& operator>>(std::istream& input, BigInteger& val) {
             assert(c >= '0' && c <= '9');
             val.data.push_back(c - '0');
         } else {
-            if (c == '-')
-                val.sign = signs::neg;
+            if (c == '-') val.sign = signs::neg;
             if (c > '0' && c <= '9') {
                 started = true;
                 val.data.push_back(c - '0');
             }
         }
     }
-    if (!started)
-        val.sign = signs::zero;
+    if (!started) val.sign = signs::zero;
     return input;
 }
 
@@ -293,5 +400,6 @@ BigInteger operator"" _bi(unsigned long long x) {
 }
 
 /*
-    умножение, деление, остаток по модулю, составное присваивание с этими операциями.
+    умножение, деление, остаток по модулю, составное присваивание с этими
+   операциями.
 */
