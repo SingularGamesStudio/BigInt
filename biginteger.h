@@ -69,42 +69,10 @@ class Complex {
 
 std::ostream &operator<<(std::ostream &output, const Complex &val) {
     output << ((double)(int)(val.r * 100.0)) / 100 << "+" << ((double)(int)(val.i * 100.0)) / 100 << "i";
-    // output << val.r << "+" << val.i << "i";
     return output;
 }
 
-/*void FFT(Complex *a, int n, Complex q, bool debug = false, int v = 0) {
-    if (n == 1)
-        return;
-    Complex *a0 = new Complex[n / 2];
-    Complex *a1 = new Complex[n / 2];
-    for (int i = 0; i < n / 2; i++) {
-        a0[i] = a[2 * i];
-        a1[i] = a[2 * i + 1];
-    }
-    FFT(a0, n / 2, q * q, debug, v);
-    FFT(a1, n / 2, q * q, debug, v + n / 2);
-    Complex qdeg = 1;
-    int pos = 0;
-    while (pos < n / 2) {
-        Complex u = a0[pos];
-        Complex v = a1[pos] * qdeg;
-        a[pos] = u + v;
-        a[pos + n / 2] = u - v;
-        qdeg *= q;
-        pos++;
-    }
-    if (debug) {
-        std::cout << n << ", " << v << " " << q << " : ";
-        for (int i = 0; i < n; i++)
-            std::cout << a[i] << " ";
-        std::cout << std::endl;
-    }
-    delete[] a0;
-    delete[] a1;
-}*/
-
-void FFT(Complex *a, int n, Complex q, bool debug = false) {
+void FFT(Complex *a, int n, Complex q) {
     int pw2 = 0;
     while ((1 << pw2) < n)
         pw2++;
@@ -120,7 +88,6 @@ void FFT(Complex *a, int n, Complex q, bool debug = false) {
         for (int start = 0; start < n; start += l) {
             int mid = start + l / 2;
             Complex qdeg = 1;
-
             int pos = start;
             while (pos < mid) {
                 Complex u = Complex(a[pos]);
@@ -129,12 +96,6 @@ void FFT(Complex *a, int n, Complex q, bool debug = false) {
                 a[pos + l / 2] = u - v;
                 qdeg *= cur;
                 pos++;
-            }
-            if (debug) {
-                std::cout << l << ", " << start << " " << cur << " : ";
-                for (int i = start; i < start + l; i++)
-                    std::cout << a[i] << " ";
-                std::cout << std::endl;
             }
         }
     }
@@ -253,20 +214,8 @@ class BigInteger {
             b[i] = second.data[i];
         long double phi = 2 * acos(-1) / static_cast<long double>(n);
         Complex q = Complex(cos(phi), sin(phi));
-        /*std::cout << "FFT1:" << std::endl
-                  << std::endl;
-        FFT1(a, n, q, true);
-        delete[] a;
-        a = new Complex[n]();
-        for (size_t i = 0; i < data.size(); i++)
-            a[i] = data[i];
-        std::cout << "FFT:" << std::endl
-                  << std::endl;*/
         FFT(a, n, q);
         FFT(b, n, q);
-        /*for (int i = 0; i < n; i++)
-            std::cout << a[i] << " ";
-        std::cout << std::endl;*/
         for (int i = 0; i < n; i++)
             a[i] *= b[i];
         FFT(a, n, Complex(cos(-phi), sin(-phi)));
@@ -453,6 +402,6 @@ BigInteger operator"" _bi(unsigned long long x) {
 }
 
 /*
-    умножение, деление, остаток по модулю, составное присваивание с этими
+    деление, остаток по модулю, составное присваивание с этими
    операциями.
 */
