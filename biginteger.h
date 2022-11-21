@@ -54,8 +54,9 @@ class Complex {
 
     Complex &operator*=(const Complex &second) {
         long double temp = r;
+        long double temp1 = second.r;
         r = r * second.r - i * second.i;
-        i = i * second.r + temp * second.i;
+        i = i * temp1 + temp * second.i;
         return *this;
     }
 
@@ -65,6 +66,79 @@ class Complex {
         return *this;
     }
 };
+
+std::ostream &operator<<(std::ostream &output, const Complex &val) {
+    output << ((double)(int)(val.r * 100.0)) / 100 << "+" << ((double)(int)(val.i * 100.0)) / 100 << "i";
+    // output << val.r << "+" << val.i << "i";
+    return output;
+}
+
+/*void FFT(Complex *a, int n, Complex q, bool debug = false, int v = 0) {
+    if (n == 1)
+        return;
+    Complex *a0 = new Complex[n / 2];
+    Complex *a1 = new Complex[n / 2];
+    for (int i = 0; i < n / 2; i++) {
+        a0[i] = a[2 * i];
+        a1[i] = a[2 * i + 1];
+    }
+    FFT(a0, n / 2, q * q, debug, v);
+    FFT(a1, n / 2, q * q, debug, v + n / 2);
+    Complex qdeg = 1;
+    int pos = 0;
+    while (pos < n / 2) {
+        Complex u = a0[pos];
+        Complex v = a1[pos] * qdeg;
+        a[pos] = u + v;
+        a[pos + n / 2] = u - v;
+        qdeg *= q;
+        pos++;
+    }
+    if (debug) {
+        std::cout << n << ", " << v << " " << q << " : ";
+        for (int i = 0; i < n; i++)
+            std::cout << a[i] << " ";
+        std::cout << std::endl;
+    }
+    delete[] a0;
+    delete[] a1;
+}*/
+
+void FFT(Complex *a, int n, Complex q, bool debug = false) {
+    int pw2 = 0;
+    while ((1 << pw2) < n)
+        pw2++;
+    for (int i = 0; i < n; i++) {
+        int rev = reversebits(i, pw2);
+        if (i < rev)
+            std::swap(a[i], a[rev]);
+    }
+    for (int l = 2; l <= n; l *= 2) {
+        Complex cur = q;
+        for (int ll = n; ll > l; ll /= 2)
+            cur *= cur;
+        for (int start = 0; start < n; start += l) {
+            int mid = start + l / 2;
+            Complex qdeg = 1;
+
+            int pos = start;
+            while (pos < mid) {
+                Complex u = Complex(a[pos]);
+                Complex v = Complex(a[pos + l / 2]) * qdeg;
+                a[pos] = u + v;
+                a[pos + l / 2] = u - v;
+                qdeg *= cur;
+                pos++;
+            }
+            if (debug) {
+                std::cout << l << ", " << start << " " << cur << " : ";
+                for (int i = start; i < start + l; i++)
+                    std::cout << a[i] << " ";
+                std::cout << std::endl;
+            }
+        }
+    }
+}
 
 class BigInteger {
    private:
@@ -164,35 +238,6 @@ class BigInteger {
         return res;
     }
 
-    void FFT(Complex *a, int n, Complex q) const {
-        int pw2 = 0;
-        while ((1 << pw2) < n)
-            pw2++;
-        for (int i = 0; i < n; i++) {
-            int rev = reversebits(i, pw2);
-            if (i < rev)
-                std::swap(a[i], a[rev]);
-        }
-        for (int l = 2; l <= n; l *= 2) {
-            Complex cur = q;
-            for (int ll = n; ll > l; ll /= 2)
-                cur *= cur;
-            for (int start = 0; start < n; start += l) {
-                int mid = start + l / 2;
-                Complex qdeg = 1;
-                int pos = start;
-                while (pos < mid) {
-                    Complex u = Complex(a[pos]);
-                    Complex v = Complex(a[pos + l / 2]) * qdeg;
-                    a[pos] = u + v;
-                    a[pos + l / 2] = u - v;
-                    qdeg *= cur;
-                    pos++;
-                }
-            }
-        }
-    }
-
     BigInteger mul(const BigInteger &second) const {
         if (sign == signs::zero || second.sign == signs::zero)
             return 0;
@@ -207,22 +252,29 @@ class BigInteger {
         for (size_t i = 0; i < second.data.size(); i++)
             b[i] = second.data[i];
         long double phi = 2 * acos(-1) / static_cast<long double>(n);
-
-        FFT(a, n, Complex(cos(phi), sin(phi)));
-        FFT(b, n, Complex(cos(phi), sin(phi)));
-        for (int i = 0; i < n; i++)
-            std::cout << "(" << a[i].r << ", " << a[i].i << ") ";
-        std::cout << std::endl;
+        Complex q = Complex(cos(phi), sin(phi));
+        /*std::cout << "FFT1:" << std::endl
+                  << std::endl;
+        FFT1(a, n, q, true);
+        delete[] a;
+        a = new Complex[n]();
+        for (size_t i = 0; i < data.size(); i++)
+            a[i] = data[i];
+        std::cout << "FFT:" << std::endl
+                  << std::endl;*/
+        FFT(a, n, q);
+        FFT(b, n, q);
+        /*for (int i = 0; i < n; i++)
+            std::cout << a[i] << " ";
+        std::cout << std::endl;*/
         for (int i = 0; i < n; i++)
             a[i] *= b[i];
         FFT(a, n, Complex(cos(-phi), sin(-phi)));
-        // std::cout << "aboba" << std::endl;
         BigInteger res;
         long long delta = 0;
         int pos = 0;
         int cntzero = 0;
         while (pos < n || delta) {
-            // std::cout << delta << std::endl;
             delta += round(a[pos].r / n);
             if (delta % MOD) {
                 for (int i = 0; i < cntzero; i++)
@@ -390,6 +442,7 @@ std::istream &operator>>(std::istream &input, BigInteger &val) {
             }
         }
     }
+    std::reverse(val.data.begin(), val.data.end());
     if (!started) val.sign = signs::zero;
     return input;
 }
