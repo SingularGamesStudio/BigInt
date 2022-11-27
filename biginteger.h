@@ -4,11 +4,12 @@
 #include <cassert>
 #include <cmath>
 #include <compare>
+#include <deque>
 #include <iostream>
 #include <string>
 #include <vector>
 
-using std::vector, std::string;
+using std::vector, std::string, std::deque;
 
 enum signs {
     neg = -1,
@@ -103,7 +104,7 @@ void FFT(Complex *a, int n, Complex q) {
 
 class BigInteger {
    private:
-    vector<int> data;
+    deque<int> data;
     signs sign;
 
     int get(size_t id) const {
@@ -159,7 +160,6 @@ class BigInteger {
         if (sign == signs::zero) return BigInteger(second);
         BigInteger res = BigInteger();
         int size = std::max(data.size(), second.data.size()) + 1;
-        res.data.reserve(size);
         int delta = 0;
         int zeros = 0;
         signs sign2 = ((sign1 == signs::neg && second.sign == signs::pos) || (sign1 == signs::pos && second.sign == signs::neg)) ? signs::neg : signs::pos;
@@ -195,7 +195,6 @@ class BigInteger {
             else
                 res.sign = sign2;
         }
-        res.data.shrink_to_fit();
         return res;
     }
 
@@ -242,6 +241,40 @@ class BigInteger {
         delete[] a;
         delete[] b;
         return res;
+    }
+
+    void scaledown(int size) {
+        while (data.size() > size) {
+            data.pop_front();
+        }
+    }
+
+    void scale(int size) {
+        scaledown(size);
+        while (data.size() < size) {
+            data.push_front(0);
+        }
+    }
+
+    BigInteger div(const BigInteger &second) const {
+        int maxsigns = 1;
+        while (maxsigns < data.size()) {
+            maxsigns *= 2;
+        }
+        maxsigns *= 2;
+        BigInteger cur = BigInteger(second);
+        cur.scale(maxsigns - 1);
+        BigInteger two = BigInteger(2);
+        two.scale(maxsigns);
+        while (two.data.size() < maxsigns) {
+            two.data.push_front(0);
+        }
+        BigInteger rev = BigInteger();
+        // init rev
+        for (int iter = 1; (1 << max(0, (iter - 4))) < data.size(); iter++) {
+            BigInteger now = second * rev;
+            rev = rev * (two - second * rev);
+        }
     }
 
    public:
