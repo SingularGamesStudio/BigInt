@@ -291,23 +291,6 @@ class BigInteger {
         return *this;
     }
 
-    std::strong_ordering operator<=>(const BigInteger &second) const {
-        if (sign == signs::pos && second.sign != signs::pos)
-            return std::strong_ordering::greater;
-        if (sign == signs::neg && second.sign != signs::neg)
-            return std::strong_ordering::less;
-        if (sign == signs::zero) return 0 <=> static_cast<int>(second.sign);
-        const BigInteger &swapped1 = (sign == signs::pos) ? *this : second;
-        const BigInteger &swapped2 = (sign == signs::pos) ? second : *this;
-        if (swapped1.data.size() != swapped2.data.size())
-            return swapped1.data.size() <=> swapped2.data.size();
-        for (int i = data.size() - 1; i >= 0; --i) {
-            if (data[i] != second.data[i])
-                return swapped1.data[i] <=> swapped2.data[i];
-        }
-        return std::strong_ordering::equal;
-    }
-
     BigInteger &operator++() {
         if (sign == signs::zero) {
             sign = signs::pos;
@@ -367,15 +350,57 @@ class BigInteger {
 
     explicit operator bool() const { return sign != signs::zero; }
 
-    friend BigInteger operator+(const BigInteger &first,
-                                const BigInteger &second);
+    BigInteger &operator+=(const BigInteger &second);
+    BigInteger &operator-=(const BigInteger &second);
+    BigInteger &operator*=(const BigInteger &second);
+    BigInteger &operator/=(const BigInteger &second);
+    BigInteger &operator%=(const BigInteger &second);
+
+    friend BigInteger
+    operator+(const BigInteger &first,
+              const BigInteger &second);
     friend BigInteger operator-(const BigInteger &first,
                                 const BigInteger &second);
     friend std::ostream &operator<<(std::ostream &output, const BigInteger &val);
     friend std::istream &operator>>(std::istream &input, BigInteger &val);
     friend BigInteger operator*(const BigInteger &first, const BigInteger &second);
     friend BigInteger operator/(const BigInteger &first, const BigInteger &second);
+    friend std::strong_ordering operator<=>(const BigInteger &first, const BigInteger &second);
+    friend bool operator==(const BigInteger &first, const BigInteger &second);
 };
+
+std::strong_ordering operator<=>(const BigInteger &first, const BigInteger &second) {
+    if (first.sign == signs::pos && second.sign != signs::pos)
+        return std::strong_ordering::greater;
+    if (first.sign == signs::neg && second.sign != signs::neg)
+        return std::strong_ordering::less;
+    if (first.sign == signs::zero) return 0 <=> static_cast<int>(second.sign);
+    const BigInteger &swapped1 = (first.sign == signs::pos) ? first : second;
+    const BigInteger &swapped2 = (first.sign == signs::pos) ? second : first;
+    if (swapped1.data.size() != swapped2.data.size())
+        return swapped1.data.size() <=> swapped2.data.size();
+    for (int i = first.data.size() - 1; i >= 0; --i) {
+        if (first.data[i] != second.data[i])
+            return swapped1.data[i] <=> swapped2.data[i];
+    }
+    return std::strong_ordering::equal;
+}
+
+bool operator==(const BigInteger &first, const BigInteger &second) {
+    if (first.sign != second.sign)
+        return false;
+    if (first.data.size() != second.data.size())
+        return false;
+    for (int i = first.data.size() - 1; i >= 0; --i) {
+        if (first.data[i] != second.data[i])
+            return false;
+    }
+    return true;
+}
+
+bool operator!=(const BigInteger &first, const BigInteger &second) {
+    return !(first == second);
+}
 
 BigInteger operator+(const BigInteger &first, const BigInteger &second) {
     return first.add(second);
@@ -525,6 +550,10 @@ BigInteger operator/(const BigInteger &first, const BigInteger &second) {
     return ans;
 }
 
+BigInteger operator%(const BigInteger &first, const BigInteger &second) {
+    return first - (first / second) * second;
+}
+
 std::istream &operator>>(std::istream &input, BigInteger &val) {
     val.data.clear();
     val.sign = signs::pos;
@@ -558,7 +587,152 @@ BigInteger operator"" _bi(unsigned long long x) {
     return x;
 }
 
+BigInteger &BigInteger::operator+=(const BigInteger &second) {
+    *this = *this + second;
+    return *this;
+}
+
+BigInteger &BigInteger::operator-=(const BigInteger &second) {
+    *this = *this - second;
+    return *this;
+}
+
+BigInteger &BigInteger::operator*=(const BigInteger &second) {
+    *this = *this * second;
+    return *this;
+}
+
+BigInteger &BigInteger::operator/=(const BigInteger &second) {
+    *this = *this / second;
+    return *this;
+}
+
+BigInteger &BigInteger::operator%=(const BigInteger &second) {
+    *this = *this % second;
+    return *this;
+}
+
+BigInteger gcd(BigInteger a, BigInteger b) {
+    if (a.sign == signs::zero)
+        return a;
+    if (b.sign == signs::zero)
+        return b;
+    a.sign = signs::pos;
+    b.sign = signs::pos;
+    while (b.sign != signs::zero) {
+        BigInteger temp = a;
+        a = b;
+        b = temp % b;
+    }
+    return a;
+}
+
+class Rational {
+   public:
+    BigInteger p;
+    BigInteger q;
+    Rational() : p(0), q(1) {}
+    Rational(const BigInteger &x) : p(x), q(1) {}
+    Rational(const BigInteger &first, const BigInteger &second) : p(first), q(second) {
+        assert(q.sign != signs::zero);
+        if (q.sign == signs::neg) {
+            q.sign = signs::pos;
+            if (p.sign == signs::neg)
+                p.sign = signs::pos;
+            if (p.sign == signs::pos)
+                p.sign = signs::neg;
+        }
+    }
+    Rational(long long x) : p(x), q(1) {}
+    Rational(const Rational &tocopy) : p(tocopy.p), q(tocopy.q) {}
+
+    Rational &operator=(const Rational &second) {
+        p = second.p;
+        q = second.q;
+        return *this;
+    }
+
+    Rational operator-() const {
+        Rational res = *this;
+        if (res.p.sign == signs::neg)
+            res.p.sign = signs::pos;
+        if (res.p.sign == signs::pos)
+            res.p.sign = signs::neg;
+        return res;
+    }
+
+    void normalize() {
+        BigInteger div = gcd(p, q);
+        p /= div;
+        q /= div;
+    }
+
+    string toString() {
+        if (p.sign == signs::zero)
+            return "0";
+        if (q == BigInteger(1))
+            return p.toString();
+        string s1 = p.toString();
+        string s2 = q.toString();
+        return s1 + "/" + s2;
+    }
+
+    explicit operator double() {
+    }
+
+    Rational &operator+=(const Rational &second);
+    Rational &operator-=(const Rational &second);
+    Rational &operator*=(const Rational &second);
+    Rational &operator/=(const Rational &second);
+};
+
+Rational operator+(const Rational &first, const Rational &second) {
+    return Rational(first.p * second.q + second.p * first.q, first.q * second.q);
+}
+
+Rational operator-(const Rational &first, const Rational &second) {
+    return Rational(first.p * second.q - second.p * first.q, first.q * second.q);
+}
+
+Rational operator*(const Rational &first, const Rational &second) {
+    return Rational(first.p * second.p, first.q * second.q);
+}
+
+Rational operator/(const Rational &first, const Rational &second) {
+    assert(second.p.sign != signs::zero);
+    return Rational(first.p * second.q, first.q * second.p);
+}
+
+Rational &Rational::operator+=(const Rational &second) {
+    *this = *this + second;
+    return *this;
+}
+
+Rational &Rational::operator-=(const Rational &second) {
+    *this = *this - second;
+    return *this;
+}
+
+Rational &Rational::operator*=(const Rational &second) {
+    *this = *this * second;
+    return *this;
+}
+
+Rational &Rational::operator/=(const Rational &second) {
+    *this = *this / second;
+    return *this;
+}
+
+std::strong_ordering operator<=>(const Rational &first, const Rational &second) {
+    if (first.p.sign == signs::pos && second.p.sign != signs::pos)
+        return std::strong_ordering::greater;
+    if (first.p.sign == signs::neg && second.p.sign != signs::neg)
+        return std::strong_ordering::less;
+    if (first.p.sign == signs::zero) return 0 <=> static_cast<int>(second.p.sign);
+    return first.p * second.q <=> second.p * first.q;
+}
+
 /*
-    деление, остаток по модулю, составное присваивание с этими
-   операциями.
+метод asDecimal(sizet precision=0), возвращающий строковое представление числа в виде десятичной дроби с precision знаками после запятой
+оператор приведения к double
 */
