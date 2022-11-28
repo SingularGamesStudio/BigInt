@@ -130,7 +130,12 @@ class BigInteger {
             ++zeros;
     }
 
-    void add1() {
+    void add1() {  // add 1 to the abs
+        if (sign == signs::zero) {
+            data.push_back(1);
+            sign = signs::pos;
+            return;
+        }
         int delta = 1;
         for (size_t i = 0; i < data.size(); i++) {
             data[i] += delta;
@@ -141,7 +146,12 @@ class BigInteger {
         if (delta != 0) data.push_back(delta);
     }
 
-    void sub1() {
+    void sub1() {  // substract 1 from the abs
+        if (sign == signs::zero) {
+            data.push_back(1);
+            sign = signs::neg;
+            return;
+        }
         int delta = -1;
         for (size_t i = 0; i < data.size(); i++) {
             data[i] += delta;
@@ -153,6 +163,7 @@ class BigInteger {
         }
         while (data.size() && data[data.size() - 1] == 0) data.pop_back();
         data.shrink_to_fit();
+        if (data.size() == 0) sign = signs::zero;
     }
 
     void swap(BigInteger &other) {
@@ -303,7 +314,6 @@ class BigInteger {
             add1();
         } else {
             sub1();
-            if (data.size() == 0) sign = signs::zero;
         }
         return *this;
     }
@@ -316,7 +326,6 @@ class BigInteger {
             add1();
         } else {
             sub1();
-            if (data.size() == 0) sign = signs::zero;
         }
         return *this;
     }
@@ -367,7 +376,6 @@ class BigInteger {
     friend bool operator==(const BigInteger &first, const BigInteger &second);
     friend PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t precision);
     friend BigInteger gcd(BigInteger a, BigInteger b);
-    friend void PoweredInteger::clear();
 };
 
 std::strong_ordering operator<=>(const BigInteger &first, const BigInteger &second) {
@@ -517,7 +525,7 @@ class PoweredInteger {
         return s1;
     }
 
-    explicit operator BigInteger() {  // rounds down
+    explicit operator BigInteger() {  // rounds to zero
         BigInteger res = val;
         if (power > 0) {
             for (int i = 0; i < power; i++) {
@@ -545,12 +553,6 @@ class PoweredInteger {
         }
         return ans;
     }
-
-    void clear() {
-        BigInteger temp = BigInteger();
-        val.swap(temp);
-        power = 0;
-    }
 };
 
 std::ostream &operator<<(std::ostream &output, const BigInteger &val) {
@@ -568,11 +570,11 @@ PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t 
     if (first.sign == signs::zero)
         return PoweredInteger(BigInteger(0), 0);
     signs ressign = mulsigns(first.sign, second.sign);
+    long double firstiter = 1.0 / second.getfirst(5);
+    PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9);
     PoweredInteger two = PoweredInteger(2, 0);
     PoweredInteger cur = PoweredInteger(second, -second.data.size());
     cur.val.sign = signs::pos;
-    long double firstiter = 1.0 / second.getfirst(5);
-    PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9);
     rev.val.sign = signs::pos;
     int maxsigns = 1;
     while (static_cast<size_t>(maxsigns) < first.data.size() + precision) {
@@ -583,31 +585,29 @@ PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t 
         rev = rev * (two - cur * rev);
         rev.cut(maxsigns);
     }
-    PoweredInteger res = PoweredInteger(first, -second.data.size()) * rev;
-    res.val.sign = ressign;
-    return res;
+    rev = PoweredInteger(first, -second.data.size()) * rev;
+    rev.val.sign = ressign;
+    return rev;
 }
 
 BigInteger operator/(const BigInteger &first, const BigInteger &second) {
     PoweredInteger res = divide(first, second, 0);
     signs ressign = res.val.sign;
     BigInteger ans = static_cast<BigInteger>(res);
-    res.clear();
-    BigInteger a = first;
-    BigInteger b = second;  // TODO:use ifs to reduce copying
-    if (ans.sign == signs::neg)
-        ans.sign = signs::pos;
-    if (a.sign == signs::neg)
-        a.sign = signs::pos;
-    if (b.sign == signs::neg)
-        b.sign = signs::pos;
-    if ((ans + 1) * b <= a)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
-        ans++;
+    res.val.data.clear();
+    ans.add1();
+    if ((ans * second).cmpabs(first) == std::strong_ordering::greater)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
+        ans.sub1();
     if (ans.sign != signs::zero)
         ans.sign = ressign;
     return ans;
 }
-
+/*
+BigInteger ans = static_cast<BigInteger>(divide(first, second, 0));
+if (((ans + 1) * second).cmpabs(first) != std::strong_ordering::greater)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
+    ans.add1();
+return ans;
+*/
 BigInteger operator%(const BigInteger &first, const BigInteger &second) {
     return first - (first / second) * second;
 }
