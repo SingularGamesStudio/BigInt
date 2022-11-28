@@ -17,6 +17,14 @@ enum signs {
     pos = 1
 };
 
+signs mulsigns(signs a, signs b) {
+    if (a == signs::zero || b == signs::zero)
+        return signs::zero;
+    if (a == b)
+        return signs::pos;
+    return signs::neg;
+}
+
 int reversebits(int x, int pw2) {
     int res = 0;
     for (int i = 0; i < pw2; i++) {
@@ -30,14 +38,14 @@ const int MOD = 10;
 
 class Complex {
    public:
-    long double r;
-    long double i;
+    double r;
+    double i;
 
     Complex() : r(0), i(0) {}
 
-    Complex(long double x) : r(x), i(0) {}
+    Complex(double x) : r(x), i(0) {}
 
-    Complex(long double r, long double i) : r(r), i(i) {}
+    Complex(double r, double i) : r(r), i(i) {}
 
     Complex(const Complex &tocopy) : r(tocopy.r), i(tocopy.i) {}
 
@@ -54,8 +62,8 @@ class Complex {
     }
 
     Complex &operator*=(const Complex &second) {
-        long double temp = r;
-        long double temp1 = second.r;
+        double temp = r;
+        double temp1 = second.r;
         r = r * second.r - i * second.i;
         i = i * temp1 + temp * second.i;
         return *this;
@@ -243,6 +251,7 @@ class BigInteger {
         delete[] b;
         return res;
     }
+
     long double getfirst(size_t cnt) const {
         long double res = 0;
         long double power = 0.1;
@@ -267,13 +276,6 @@ class BigInteger {
         } else
             sign = signs::neg;
         n = std::abs(n);
-        while (n > 0) {
-            data.push_back(n % MOD);
-            n /= MOD;
-        }
-    }
-
-    BigInteger(unsigned long long n, signs sign) : sign(sign) {
         while (n > 0) {
             data.push_back(n % MOD);
             n /= MOD;
@@ -331,10 +333,7 @@ class BigInteger {
 
     BigInteger operator-() const {
         BigInteger res = BigInteger(*this);
-        if (sign == signs::pos)
-            res.sign = signs::neg;
-        else if (sign == signs::neg)
-            res.sign = signs::pos;
+        res.sign = mulsigns(res.sign, signs::neg);
         return res;
     }
 
@@ -356,17 +355,15 @@ class BigInteger {
     BigInteger &operator/=(const BigInteger &second);
     BigInteger &operator%=(const BigInteger &second);
 
-    friend BigInteger
-    operator+(const BigInteger &first,
-              const BigInteger &second);
-    friend BigInteger operator-(const BigInteger &first,
-                                const BigInteger &second);
+    friend BigInteger operator+(const BigInteger &first, const BigInteger &second);
+    friend BigInteger operator-(const BigInteger &first, const BigInteger &second);
     friend std::ostream &operator<<(std::ostream &output, const BigInteger &val);
     friend std::istream &operator>>(std::istream &input, BigInteger &val);
     friend BigInteger operator*(const BigInteger &first, const BigInteger &second);
     friend BigInteger operator/(const BigInteger &first, const BigInteger &second);
     friend std::strong_ordering operator<=>(const BigInteger &first, const BigInteger &second);
     friend bool operator==(const BigInteger &first, const BigInteger &second);
+    friend PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t precision);
 };
 
 std::strong_ordering operator<=>(const BigInteger &first, const BigInteger &second) {
@@ -434,6 +431,7 @@ class PoweredInteger {
         res.power = power + second.power;
         return res;
     }
+
     PoweredInteger operator+(const PoweredInteger &second) const {
         long long minpower = std::min(power, second.power);
         PoweredInteger a = PoweredInteger(*this);
@@ -450,6 +448,7 @@ class PoweredInteger {
             }
         return PoweredInteger(a.val + b.val, minpower);
     }
+
     PoweredInteger operator-(const PoweredInteger &second) const {
         long long minpower = std::min(power, second.power);
         PoweredInteger a = PoweredInteger(*this);
@@ -466,6 +465,7 @@ class PoweredInteger {
             }
         return PoweredInteger(a.val - b.val, minpower);
     }
+
     void cut(int length) {  // rounds to closest
         int delta = 0;
         while (val.data.size() > static_cast<size_t>(length)) {
@@ -476,23 +476,45 @@ class PoweredInteger {
         if (delta >= MOD / 2)
             val++;
     }
-    string toString() const {
+
+    string toString(int precision) const {
         string s = val.toString();
-        if (power == 0)
-            return s;
-        if (power > 0) {
+        if (power >= 0) {
             for (int i = 0; i < power; i++)
                 s.push_back('0');
+            if (precision > 0) {
+                s.push_back('.');
+                for (int i = 0; i < precision; i++)
+                    s.push_back('0');
+            }
             return s;
         }
-        while (static_cast<int>(s.length()) < -power + 1) {
-            s = "0" + s;
+        bool neg = (s[0] == '-');
+        string s0 = "";
+        for (size_t i = neg; i < s.size(); i++)
+            s0 += s[i];
+        while (static_cast<int>(s0.length()) < -power + 1) {
+            s0 = "0" + s0;
         }
-        string s1 = "";
-        for (size_t i = 0; i < s.length(); i++) {
-            s1.push_back(s[i]);
-            if (static_cast<int>(s.length()) - static_cast<int>(i) - 1 == -power)
+        string s1 = neg ? "-" : "";
+        int cnt = 0;
+        for (size_t i = 0; i < s0.length(); i++) {
+            s1.push_back(s0[i]);
+            if (cnt) {
+                cnt++;
+                if (cnt >= precision + 1)
+                    break;
+            }
+            if (static_cast<int>(s0.length()) - static_cast<int>(i) - 1 == -power) {
+                if (precision == 0)
+                    break;
                 s1.push_back('.');
+                cnt++;
+            }
+        }
+        while (cnt < precision + 1) {
+            s1.push_back(0);
+            cnt++;
         }
         return s1;
     }
@@ -514,6 +536,15 @@ class PoweredInteger {
         }
         return res;
     }
+    explicit operator double() {
+        double pw10 = pow(10, power);
+        double ans = 0;
+        for (size_t i = 0; i < val.data.size(); i++) {
+            ans += pw10 * val.data[i];
+            pw10 *= 10;
+        }
+        return ans;
+    }
 };
 
 std::ostream &operator<<(std::ostream &output, const BigInteger &val) {
@@ -522,31 +553,54 @@ std::ostream &operator<<(std::ostream &output, const BigInteger &val) {
 }
 
 std::ostream &operator<<(std::ostream &output, const PoweredInteger &val) {
-    output << val.toString();
+    output << val.toString(100);
     return output;
 }
 
-BigInteger operator/(const BigInteger &first, const BigInteger &second) {
+PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t precision) {
+    assert(second.sign != signs::zero);
+    if (first.sign == signs::zero)
+        return PoweredInteger(BigInteger(0), 0);
+    signs ressign = mulsigns(first.sign, second.sign);
     PoweredInteger two = PoweredInteger(2, 0);
     PoweredInteger cur = PoweredInteger(second, -second.data.size());
+    cur.val.sign = signs::pos;
     // std::cout << cur << "\n";
     long double firstiter = 1.0 / second.getfirst(5);
     PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9);
+    rev.val.sign = signs::pos;
     int maxsigns = 1;
-    while (static_cast<size_t>(maxsigns) < first.data.size()) {
+    while (static_cast<size_t>(maxsigns) < first.data.size() + precision) {
         maxsigns *= 2;
     }
     maxsigns *= 4;
-    for (int iter = 1; static_cast<size_t>((1 << std::max(0, (iter - 4)))) < first.data.size(); iter++) {
+    for (int iter = 1; static_cast<size_t>((1 << std::max(0, (iter - 3)))) < first.data.size() + precision; iter++) {
         // std::cout << rev << "\n";
         rev = rev * (two - cur * rev);
         rev.cut(maxsigns);
     }
     PoweredInteger res = PoweredInteger(first, -second.data.size()) * rev;
+    res.val.sign = ressign;
     // std::cout << res << "\n";
+    return res;
+}
+
+BigInteger operator/(const BigInteger &first, const BigInteger &second) {
+    PoweredInteger res = divide(first, second, 0);
     BigInteger ans = static_cast<BigInteger>(res);
-    if ((ans + 1) * second <= first)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
-        return ans + 1;
+    BigInteger a = first;
+    BigInteger b = second;
+    signs ressign = res.val.sign;
+    if (ans.sign == signs::neg)
+        ans.sign = signs::pos;
+    if (a.sign == signs::neg)
+        a.sign = signs::pos;
+    if (b.sign == signs::neg)
+        b.sign = signs::pos;
+    if ((ans + 1) * b <= a)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
+        ans++;
+    if (ans.sign != signs::zero)
+        ans.sign = ressign;
     return ans;
 }
 
@@ -614,9 +668,9 @@ BigInteger &BigInteger::operator%=(const BigInteger &second) {
 
 BigInteger gcd(BigInteger a, BigInteger b) {
     if (a.sign == signs::zero)
-        return a;
-    if (b.sign == signs::zero)
         return b;
+    if (b.sign == signs::zero)
+        return a;
     a.sign = signs::pos;
     b.sign = signs::pos;
     while (b.sign != signs::zero) {
@@ -637,10 +691,7 @@ class Rational {
         assert(q.sign != signs::zero);
         if (q.sign == signs::neg) {
             q.sign = signs::pos;
-            if (p.sign == signs::neg)
-                p.sign = signs::pos;
-            if (p.sign == signs::pos)
-                p.sign = signs::neg;
+            p.sign = mulsigns(p.sign, signs::neg);
         }
     }
     Rational(long long x) : p(x), q(1) {}
@@ -654,10 +705,7 @@ class Rational {
 
     Rational operator-() const {
         Rational res = *this;
-        if (res.p.sign == signs::neg)
-            res.p.sign = signs::pos;
-        if (res.p.sign == signs::pos)
-            res.p.sign = signs::neg;
+        res.p.sign = mulsigns(res.p.sign, signs::neg);
         return res;
     }
 
@@ -668,6 +716,7 @@ class Rational {
     }
 
     string toString() {
+        normalize();
         if (p.sign == signs::zero)
             return "0";
         if (q == BigInteger(1))
@@ -677,7 +726,14 @@ class Rational {
         return s1 + "/" + s2;
     }
 
+    string asDecimal(size_t precision = 0) {
+        PoweredInteger res = divide(p, q, precision);
+        return res.toString(precision);
+    }
+
     explicit operator double() {
+        PoweredInteger res = divide(p, q, 60);
+        return static_cast<double>(res);
     }
 
     Rational &operator+=(const Rational &second);
@@ -732,7 +788,10 @@ std::strong_ordering operator<=>(const Rational &first, const Rational &second) 
     return first.p * second.q <=> second.p * first.q;
 }
 
-/*
-метод asDecimal(sizet precision=0), возвращающий строковое представление числа в виде десятичной дроби с precision знаками после запятой
-оператор приведения к double
-*/
+bool operator==(const Rational &first, const Rational &second) {
+    return first.p * second.q == second.p * first.q;
+}
+
+bool operator!=(const Rational &first, const Rational &second) {
+    return !(first == second);
+}
