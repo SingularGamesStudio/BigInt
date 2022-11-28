@@ -9,5 +9,5 @@ int main() {
     BigInteger b;
     cin >> a >> b;
     // cout << a << " " << b << " " << BigInteger(455) << endl;
-    cout << (a * b) << "\n";
+    cout << a / b;
 }

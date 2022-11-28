@@ -102,11 +102,10 @@ void FFT(Complex *a, int n, Complex q) {
     }
 }
 
+class PoweredInteger;
+
 class BigInteger {
    private:
-    deque<int> data;
-    signs sign;
-
     int get(size_t id) const {
         if (id < data.size()) return data[id];
         return 0;
@@ -176,7 +175,9 @@ class BigInteger {
             BigInteger abs2 = second.abs();
             bool swapped = false;
             if (abs1 < abs2) {
-                std::swap(abs1, abs2);
+                BigInteger temp = abs2;
+                abs2 = abs1;
+                abs1 = temp;
                 swapped = true;
             }
             for (int i = 0; i < size; i++) {
@@ -242,42 +243,20 @@ class BigInteger {
         delete[] b;
         return res;
     }
-
-    void scaledown(int size) {
-        while (data.size() > size) {
-            data.pop_front();
+    long double getfirst(size_t cnt) const {
+        long double res = 0;
+        long double power = 0.1;
+        for (size_t i = 0; i < std::min(cnt, data.size()); i++) {
+            res += power * data[data.size() - i - 1];
+            power /= 10;
         }
-    }
-
-    void scale(int size) {
-        scaledown(size);
-        while (data.size() < size) {
-            data.push_front(0);
-        }
-    }
-
-    BigInteger div(const BigInteger &second) const {
-        int maxsigns = 1;
-        while (maxsigns < data.size()) {
-            maxsigns *= 2;
-        }
-        maxsigns *= 2;
-        BigInteger cur = BigInteger(second);
-        cur.scale(maxsigns - 1);
-        BigInteger two = BigInteger(2);
-        two.scale(maxsigns);
-        while (two.data.size() < maxsigns) {
-            two.data.push_front(0);
-        }
-        BigInteger rev = BigInteger();
-        // init rev
-        for (int iter = 1; (1 << max(0, (iter - 4))) < data.size(); iter++) {
-            BigInteger now = second * rev;
-            rev = rev * (two - second * rev);
-        }
+        return res;
     }
 
    public:
+    deque<int> data;
+    signs sign;
+
     BigInteger() : sign(signs::zero) {}
 
     BigInteger(long long n) {
@@ -294,9 +273,22 @@ class BigInteger {
         }
     }
 
+    BigInteger(unsigned long long n, signs sign) : sign(sign) {
+        while (n > 0) {
+            data.push_back(n % MOD);
+            n /= MOD;
+        }
+    }
+
     BigInteger(const BigInteger &base) {
         data = base.data;
         sign = base.sign;
+    }
+
+    BigInteger &operator=(const BigInteger &second) {
+        data = second.data;
+        sign = second.sign;
+        return *this;
     }
 
     std::strong_ordering operator<=>(const BigInteger &second) const {
@@ -382,6 +374,7 @@ class BigInteger {
     friend std::ostream &operator<<(std::ostream &output, const BigInteger &val);
     friend std::istream &operator>>(std::istream &input, BigInteger &val);
     friend BigInteger operator*(const BigInteger &first, const BigInteger &second);
+    friend BigInteger operator/(const BigInteger &first, const BigInteger &second);
 };
 
 BigInteger operator+(const BigInteger &first, const BigInteger &second) {
@@ -396,9 +389,140 @@ BigInteger operator-(const BigInteger &first, const BigInteger &second) {
     return first.add(second, signs::neg);
 }
 
+class PoweredInteger {
+   public:
+    BigInteger val;
+    long long power;
+    PoweredInteger(BigInteger val, long long power) : val(val), power(power) {}
+    PoweredInteger() : val(BigInteger(0)), power(0) {}
+    PoweredInteger(const PoweredInteger &tocopy) : val(tocopy.val), power(tocopy.power) {}
+
+    PoweredInteger &operator=(const PoweredInteger &second) {
+        val = second.val;
+        power = second.power;
+        return *this;
+    }
+
+    PoweredInteger operator*(const PoweredInteger &second) const {
+        PoweredInteger res;
+        res.val = val * second.val;
+        res.power = power + second.power;
+        return res;
+    }
+    PoweredInteger operator+(const PoweredInteger &second) const {
+        long long minpower = std::min(power, second.power);
+        PoweredInteger a = PoweredInteger(*this);
+        PoweredInteger b = PoweredInteger(second);
+        if (a.val.sign != signs::zero)
+            while (a.power > minpower) {
+                a.val.data.push_front(0);
+                a.power--;
+            }
+        if (b.val.sign != signs::zero)
+            while (b.power > minpower) {
+                b.val.data.push_front(0);
+                b.power--;
+            }
+        return PoweredInteger(a.val + b.val, minpower);
+    }
+    PoweredInteger operator-(const PoweredInteger &second) const {
+        long long minpower = std::min(power, second.power);
+        PoweredInteger a = PoweredInteger(*this);
+        PoweredInteger b = PoweredInteger(second);
+        if (a.val.sign != signs::zero)
+            while (a.power > minpower) {
+                a.val.data.push_front(0);
+                a.power--;
+            }
+        if (b.val.sign != signs::zero)
+            while (b.power > minpower) {
+                b.val.data.push_front(0);
+                b.power--;
+            }
+        return PoweredInteger(a.val - b.val, minpower);
+    }
+    void cut(int length) {  // rounds to closest
+        int delta = 0;
+        while (val.data.size() > static_cast<size_t>(length)) {
+            delta = val.data.front();
+            val.data.pop_front();
+            power++;
+        }
+        if (delta >= MOD / 2)
+            val++;
+    }
+    string toString() const {
+        string s = val.toString();
+        if (power == 0)
+            return s;
+        if (power > 0) {
+            for (int i = 0; i < power; i++)
+                s.push_back('0');
+            return s;
+        }
+        while (static_cast<int>(s.length()) < -power + 1) {
+            s = "0" + s;
+        }
+        string s1 = "";
+        for (size_t i = 0; i < s.length(); i++) {
+            s1.push_back(s[i]);
+            if (static_cast<int>(s.length()) - static_cast<int>(i) - 1 == -power)
+                s1.push_back('.');
+        }
+        return s1;
+    }
+    explicit operator BigInteger() {  // rounds down
+        BigInteger res = val;
+        if (power > 0) {
+            for (int i = 0; i < power; i++) {
+                res.data.push_front(0);
+            }
+        } else {
+            for (int i = 0; i < -power; i++) {
+                if (res.data.size() == 0)
+                    return BigInteger(0);
+                res.data.pop_front();
+            }
+            if (res.data.size() == 0) {
+                return BigInteger(0);
+            }
+        }
+        return res;
+    }
+};
+
 std::ostream &operator<<(std::ostream &output, const BigInteger &val) {
     output << val.toString();
     return output;
+}
+
+std::ostream &operator<<(std::ostream &output, const PoweredInteger &val) {
+    output << val.toString();
+    return output;
+}
+
+BigInteger operator/(const BigInteger &first, const BigInteger &second) {
+    PoweredInteger two = PoweredInteger(2, 0);
+    PoweredInteger cur = PoweredInteger(second, -second.data.size());
+    // std::cout << cur << "\n";
+    long double firstiter = 1.0 / second.getfirst(5);
+    PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9);
+    int maxsigns = 1;
+    while (static_cast<size_t>(maxsigns) < first.data.size()) {
+        maxsigns *= 2;
+    }
+    maxsigns *= 4;
+    for (int iter = 1; static_cast<size_t>((1 << std::max(0, (iter - 4)))) < first.data.size(); iter++) {
+        // std::cout << rev << "\n";
+        rev = rev * (two - cur * rev);
+        rev.cut(maxsigns);
+    }
+    PoweredInteger res = PoweredInteger(first, -second.data.size()) * rev;
+    // std::cout << res << "\n";
+    BigInteger ans = static_cast<BigInteger>(res);
+    if ((ans + 1) * second <= first)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
+        return ans + 1;
+    return ans;
 }
 
 std::istream &operator>>(std::istream &input, BigInteger &val) {
