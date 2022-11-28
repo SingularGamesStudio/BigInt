@@ -34,7 +34,8 @@ int reversebits(int x, int pw2) {
     return res;
 }
 
-const int MOD = 10;
+const int MOD = 1000;
+const int DIGITS = 3;
 
 class Complex {
    public:
@@ -267,11 +268,13 @@ class BigInteger {
 
     long double getfirst(size_t cnt) const {
         long double res = 0;
-        long double power = 0.1;
-        for (size_t i = 0; i < std::min(cnt, data.size()); i++) {
+        long double power = static_cast<long double>(1) / MOD;
+        for (size_t i = 0; i < std::min(cnt / DIGITS + 2, data.size()); i++) {
             res += power * data[data.size() - i - 1];
-            power /= 10;
+            power /= MOD;
         }
+        while (res < 0.1)
+            res *= 10;
         return res;
     }
 
@@ -352,7 +355,12 @@ class BigInteger {
         string s = "";
         if (sign == signs::neg) s += '-';
         for (int i = data.size() - 1; i >= 0; i--) {
-            s += '0' + data[i];
+            string s0 = std::to_string(data[i]);
+            if (i != static_cast<int>(data.size()) - 1)
+                while (s0.size() < 3) {
+                    s0 = "0" + s0;
+                }
+            s += s0;
         }
         if (sign == signs::zero) s = "0";
         return s;
@@ -483,23 +491,27 @@ class PoweredInteger {
             val++;
     }
 
-    string toString(int precision) const {  // TODO: rewrite this shit
+    string toString(int precision10) const {  // TODO: rewrite this shit
         string s = val.toString();
+        string o = "";
+        for (int j = 0; j < DIGITS; j++)
+            o += '0';
         if (power >= 0) {
             for (int i = 0; i < power; i++)
-                s.push_back('0');
-            if (precision > 0) {
+                s += o;
+            if (precision10 > 0) {
                 s.push_back('.');
-                for (int i = 0; i < precision; i++)
+                for (int i = 0; i < precision10; i++)
                     s.push_back('0');
             }
             return s;
         }
+
         bool neg = (s[0] == '-');
         string s0 = "";
         for (size_t i = neg; i < s.size(); i++)
             s0 += s[i];
-        while (static_cast<int>(s0.length()) < -power + 1) {
+        while (static_cast<int>(s0.length()) < -DIGITS * power + 1) {
             s0 = "0" + s0;
         }
         string s1 = neg ? "-" : "";
@@ -508,17 +520,17 @@ class PoweredInteger {
             s1.push_back(s0[i]);
             if (cnt) {
                 cnt++;
-                if (cnt >= precision + 1)
+                if (cnt >= precision10 + 1)
                     break;
             }
-            if (static_cast<int>(s0.length()) - static_cast<int>(i) - 1 == -power) {
-                if (precision == 0)
+            if (static_cast<int>(s0.length()) - static_cast<int>(i) - 1 == -DIGITS * power) {
+                if (precision10 == 0)
                     break;
                 s1.push_back('.');
                 cnt++;
             }
         }
-        while (cnt < precision + 1) {
+        while (cnt < precision10 + 1) {
             s1.push_back(0);
             cnt++;
         }
@@ -545,11 +557,11 @@ class PoweredInteger {
     }
 
     explicit operator double() {
-        double pw10 = pow(10, power);
+        double pw10 = pow(MOD, power);
         double ans = 0;
         for (size_t i = 0; i < val.data.size(); i++) {
             ans += pw10 * val.data[i];
-            pw10 *= 10;
+            pw10 *= MOD;
         }
         return ans;
     }
@@ -571,9 +583,15 @@ PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t 
         return PoweredInteger(BigInteger(0), 0);
     signs ressign = mulsigns(first.sign, second.sign);
     long double firstiter = 1.0 / second.getfirst(5);
-    PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9);
+    PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9 / DIGITS);
     PoweredInteger two = PoweredInteger(2, 0);
-    PoweredInteger cur = PoweredInteger(second, -second.data.size());
+    int sizediff = 1;
+    int temp = second.data[second.data.size() - 1];
+    while (temp * 10 < MOD) {
+        temp *= 10;
+        sizediff *= 10;
+    }
+    PoweredInteger cur = PoweredInteger(second * sizediff, -second.data.size());
     cur.val.sign = signs::pos;
     rev.val.sign = signs::pos;
     int maxsigns = 1;
@@ -582,10 +600,16 @@ PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t 
     }
     maxsigns *= 4;
     for (int iter = 1; static_cast<size_t>((1 << std::max(0, (iter - 3)))) < first.data.size() + precision; iter++) {
+        // std::cout << rev << "\n";
         rev = rev * (two - cur * rev);
         rev.cut(maxsigns);
     }
-    rev = PoweredInteger(first, -second.data.size()) * rev;
+    // std::cout << rev << "\n";
+    // std::cout << cur << "\n";
+    cur = PoweredInteger(first * sizediff, -second.data.size());
+    // std::cout << cur << "\n";
+    rev = cur * rev;
+    // std::cout << rev << "\n";
     rev.val.sign = ressign;
     return rev;
 }
@@ -602,12 +626,7 @@ BigInteger operator/(const BigInteger &first, const BigInteger &second) {
         ans.sign = ressign;
     return ans;
 }
-/*
-BigInteger ans = static_cast<BigInteger>(divide(first, second, 0));
-if (((ans + 1) * second).cmpabs(first) != std::strong_ordering::greater)  // for example, 228/3 = 75.999999999999999999999999999999=76, but rounded down to 75
-    ans.add1();
-return ans;
-*/
+
 BigInteger operator%(const BigInteger &first, const BigInteger &second) {
     return first - (first / second) * second;
 }
@@ -623,19 +642,30 @@ std::istream &operator>>(std::istream &input, BigInteger &val) {
             break;
     }
     bool started = false;
+    vector<int> pool;
     while (input.get(c) && !std::isspace(c)) {
         if (started) {
             assert(c >= '0' && c <= '9');
-            val.data.push_back(c - '0');
+            pool.push_back(c - '0');
         } else {
             if (c == '-') val.sign = signs::neg;
             if (c > '0' && c <= '9') {
                 started = true;
-                val.data.push_back(c - '0');
+                pool.push_back(c - '0');
             }
         }
     }
-    std::reverse(val.data.begin(), val.data.end());
+    std::reverse(pool.begin(), pool.end());
+    for (int i = 0; i < static_cast<int>(pool.size()); i += DIGITS) {
+        int x = 0;
+        for (int j = i + DIGITS - 1; j >= i; j--) {
+            if (j < static_cast<int>(pool.size())) {
+                x *= 10;
+                x += pool[j];
+            }
+        }
+        val.data.push_back(x);
+    }
     if (!started) val.sign = signs::zero;
     return input;
 }
@@ -727,13 +757,13 @@ class Rational {
         return p.toString() + "/" + q.toString();
     }
 
-    string asDecimal(size_t precision = 0) {
-        PoweredInteger res = divide(p, q, precision);
-        return res.toString(precision);
+    string asDecimal(size_t precision10 = 0) {
+        PoweredInteger res = divide(p, q, precision10 / DIGITS + 2);
+        return res.toString(precision10);
     }
 
     explicit operator double() {
-        PoweredInteger res = divide(p, q, 60);
+        PoweredInteger res = divide(p, q, 20);
         return static_cast<double>(res);
     }
 
