@@ -16,6 +16,7 @@ int main() {
     mt19937_64 rnd(42);
     // cin >> a >> b;
     // cout << a / b;
+    // return 0;
     int cnt = 0;
     while (1) {
         cnt++;
@@ -23,8 +24,8 @@ int main() {
             cnt = 0;
             cout << "20 epochs done" << endl;
         }
-        long long x = rnd() % (long long)1e17, y = rnd() % (long long)1e17;
-        if (!st10(x) && !st10(y)) {
+        long long x = rnd() % (long long)1e5, y = rnd() % (long long)1e5;
+        if (y != 0) {
             a = BigInteger(x), b = BigInteger(y);
             if (x / y != (a / b)) {
                 cout << x << " " << y << endl;

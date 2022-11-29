@@ -34,8 +34,8 @@ int reversebits(int x, int pw2) {
     return res;
 }
 
-const int MOD = 1000;
-const int DIGITS = 3;
+const int MOD = 100;
+const int DIGITS = 2;
 
 class Complex {
    public:
@@ -115,6 +115,23 @@ class PoweredInteger;
 
 class BigInteger {
    private:
+    int pw10() const {
+        int ans = 0;
+        for (size_t i = 0; i < data.size() - 1; i++) {
+            if (data[i] != 0)
+                return -1;
+            ans += DIGITS;
+        }
+        int x = data[data.size() - 1];
+        while (x % 10 == 0) {
+            ans++;
+            x /= 10;
+        }
+        if (x != 1)
+            return -1;
+        return ans;
+    }
+
     int get(size_t id) const {
         if (id < data.size()) return data[id];
         return 0;
@@ -357,7 +374,7 @@ class BigInteger {
         for (int i = data.size() - 1; i >= 0; i--) {
             string s0 = std::to_string(data[i]);
             if (i != static_cast<int>(data.size()) - 1)
-                while (s0.size() < 3) {
+                while (s0.size() < DIGITS) {
                     s0 = "0" + s0;
                 }
             s += s0;
@@ -581,37 +598,44 @@ PoweredInteger divide(const BigInteger &first, const BigInteger &second, size_t 
     assert(second.sign != signs::zero);
     if (first.sign == signs::zero)
         return PoweredInteger(BigInteger(0), 0);
+    int temp = second.pw10();
     signs ressign = mulsigns(first.sign, second.sign);
-    long double firstiter = 1.0 / second.getfirst(5);
-    PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(1000000000.0 * firstiter)), -9 / DIGITS);
-    PoweredInteger two = PoweredInteger(2, 0);
-    int sizediff = 1;
-    int temp = second.data[second.data.size() - 1];
-    while (temp * 10 < MOD) {
-        temp *= 10;
-        sizediff *= 10;
+    if (temp != -1) {
+        int sizediff = 1;
+        for (int i = temp % DIGITS; i < DIGITS; i++) {
+            sizediff *= 10;
+        }
+        PoweredInteger ans = PoweredInteger(sizediff * first, -temp / DIGITS - 1);
+        ans.val.sign = ressign;
+        // std::cout << ans;
+        return ans;
+    } else {
+        long double firstiter = 1.0 / second.getfirst(5);
+        PoweredInteger rev = PoweredInteger(BigInteger(static_cast<long long>(100000000.0 * firstiter)), -8 / DIGITS);
+        PoweredInteger two = PoweredInteger(2, 0);
+        int sizediff = 1;
+        int temp = second.data[second.data.size() - 1];
+        while (temp * 10 < MOD) {
+            temp *= 10;
+            sizediff *= 10;
+        }
+        PoweredInteger cur = PoweredInteger(second * sizediff, -second.data.size());
+        cur.val.sign = signs::pos;
+        rev.val.sign = signs::pos;
+        int maxsigns = 1;
+        while (static_cast<size_t>(maxsigns) < first.data.size() + precision) {
+            maxsigns *= 2;
+        }
+        maxsigns *= 4;
+        for (int iter = 1; static_cast<size_t>((1 << std::max(0, (iter - 3)))) < first.data.size() + precision; iter++) {
+            rev = rev * (two - cur * rev);
+            rev.cut(maxsigns);
+        }
+        cur = PoweredInteger(first * sizediff, -second.data.size());
+        rev = cur * rev;
+        rev.val.sign = ressign;
+        return rev;
     }
-    PoweredInteger cur = PoweredInteger(second * sizediff, -second.data.size());
-    cur.val.sign = signs::pos;
-    rev.val.sign = signs::pos;
-    int maxsigns = 1;
-    while (static_cast<size_t>(maxsigns) < first.data.size() + precision) {
-        maxsigns *= 2;
-    }
-    maxsigns *= 4;
-    for (int iter = 1; static_cast<size_t>((1 << std::max(0, (iter - 3)))) < first.data.size() + precision; iter++) {
-        // std::cout << rev << "\n";
-        rev = rev * (two - cur * rev);
-        rev.cut(maxsigns);
-    }
-    // std::cout << rev << "\n";
-    // std::cout << cur << "\n";
-    cur = PoweredInteger(first * sizediff, -second.data.size());
-    // std::cout << cur << "\n";
-    rev = cur * rev;
-    // std::cout << rev << "\n";
-    rev.val.sign = ressign;
-    return rev;
 }
 
 BigInteger operator/(const BigInteger &first, const BigInteger &second) {
